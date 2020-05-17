@@ -18,19 +18,28 @@ result.wait()
 chat_id = result.update['id']  # seems like it also serves as saved messages chat id
 
 orig_converted_msgs = pickle.load(open('orig_converted_msgs.pickle', 'rb'))
-sleep_time = 0.5  # as a precaution, seems like 10-min ban after 1000s of requests is happening anyway
+sleep_time = 1  # in seconds as a precaution against flood prevention delays
+
+def check_request(request):
+    request.wait()
+    if request.error:
+        print(request.error_info)
+        time.sleep(2000)
+    if 'sending_state' in request.update:
+        if request.update['sending_state'] == 'messageSendingStatePending':
+            print(msg_i, 'messageSendingStatePending')
+            time.sleep(100)
+        elif request.update['sending_state'] == 'messageSendingStateFailed':
+            print(msg_i, 'messageSendingStateFailed')
+            time.sleep(2000)  # precautions against flood_wait
+    time.sleep(sleep_time)
 
 requests = []
 for msg_i, (orig, converted) in enumerate(orig_converted_msgs[:n]):
     if len(converted['text']) > 20:  # 20 means there is only date and newline
         request = tg.send_message(chat_id, converted['text'])
-
         requests.append(request)
-        request.wait()
-        if request.error:
-            print(request.error_info)
-            break
-        time.sleep(sleep_time)
+        check_request(request)
     
     if 'file' in converted:
         data = {
@@ -43,13 +52,8 @@ for msg_i, (orig, converted) in enumerate(orig_converted_msgs[:n]):
             },
         }
         request = tg._send_data(data)
-    
         requests.append(request)
-        request.wait()
-        if request.error:
-            print(request.error_info)
-            break
-        time.sleep(sleep_time)
+        check_request(request)
     
     if 'photo' in converted:
         data = {
@@ -62,10 +66,5 @@ for msg_i, (orig, converted) in enumerate(orig_converted_msgs[:n]):
             },
         }
         request = tg._send_data(data)
-    
         requests.append(request)
-        request.wait()
-        if request.error:
-            print(request.error_info)
-            break
-        time.sleep(sleep_time)
+        check_request(request)
